@@ -20,8 +20,8 @@
     </modules>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Core test stack -->
@@ -210,13 +210,9 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${surefire.version}</version>
                     <configuration>
-                        <suiteXmlFiles>
-                            <suiteXmlFile>${suiteXmlFile}</suiteXmlFile>
-                        </suiteXmlFiles>
-                        <systemPropertyVariables>
-                            <env>${env}</env>
-                            <browser>${browser}</browser>
-                        </systemPropertyVariables>
+                        <!-- Default: skip tests in library modules.
+                             framework-tests overrides this with <skip>false</skip>. -->
+                        <skip>true</skip>
                     </configuration>
                 </plugin>
             </plugins>
