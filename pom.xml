@@ -47,6 +47,7 @@
         <log4j.version>2.23.1</log4j.version>
         <owner.version>1.0.12</owner.version>
         <jackson.version>2.17.2</jackson.version>
+        <junit5.version>5.10.3</junit5.version>
 
         <!-- Plugins -->
         <surefire.version>3.2.5</surefire.version>
@@ -174,6 +175,11 @@
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
                 <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit5.version}</version>
             </dependency>
 
             <!-- Internal modules -->
