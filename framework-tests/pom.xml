@@ -48,9 +48,6 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <skip>false</skip>
-                    <!-- Phase 0: no test classes exist yet. Will be removed once
-                         real tests are added in Phase 3. -->
-                    <failIfNoTests>false</failIfNoTests>
                     <suiteXmlFiles>
                         <suiteXmlFile>${suiteXmlFile}</suiteXmlFile>
                     </suiteXmlFiles>
