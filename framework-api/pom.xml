@@ -35,5 +35,31 @@
             <groupId>com.github.javafaker</groupId>
             <artifactId>javafaker</artifactId>
         </dependency>
+
+        <!-- Cucumber DataTable type is used by PayloadService / ApiAssertionService -->
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-java</artifactId>
+        </dependency>
+
+        <!-- Test scope: pure-Java unit tests for payload + value-parsing logic -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Override the parent's default skip=true for library modules.
+                         framework-api runs JUnit 5 unit tests for payload/value logic. -->
+                    <skip>false</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["id", "name", "type", "uri"],
+  "properties": {
+    "id":   { "type": "string" },
+    "name": { "type": "string" },
+    "type": { "type": "string", "enum": ["artist"] },
+    "uri":  { "type": "string" },
+    "genres": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "followers": {
+      "type": "object",
+      "properties": {
+        "total": { "type": "integer" }
+      }
+    }
+  }
+}

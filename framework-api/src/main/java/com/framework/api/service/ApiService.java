@@ -4,6 +4,7 @@ import com.framework.api.auth.AuthManager;
 import com.framework.common.config.AppConfig;
 import com.framework.common.config.ConfigManager;
 import com.framework.common.context.TestContext;
+import com.framework.common.utils.JsonUtils;
 import com.framework.common.utils.LogUtils;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
@@ -16,21 +17,23 @@ import io.restassured.specification.RequestSpecification;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Phase 3 API client. GET only.
+ * The framework's HTTP client. All API traffic flows through this class — test
+ * code never imports RestAssured directly.
  *
- * <p>Responsibilities:
- * <ul>
- *   <li>Build a {@link RequestSpecification} rooted at {@link AppConfig#apiBaseUrl()}.</li>
- *   <li>Attach the bearer token resolved by {@link AuthManager}.</li>
- *   <li>Attach any headers staged in {@link TestContext#getHeaders()}.</li>
- *   <li>Execute the call and stash the response, request log, and response log
- *       into {@link TestContext} for downstream steps and reporting.</li>
- * </ul>
+ * <p>Phase 4 adds POST/PUT/PATCH/DELETE and request-body support to the GET-only
+ * Phase 3 version. Every verb:
+ * <ol>
+ *   <li>resolves the auth token and attaches it as a Bearer header,</li>
+ *   <li>attaches any headers staged on {@link TestContext#getHeaders()},</li>
+ *   <li>attaches a body (for write verbs) from the passed JSON string,</li>
+ *   <li>executes via RestAssured,</li>
+ *   <li>stores the {@link Response} and a parsed response DocumentContext into
+ *       the context, plus captures request/response logs via a filter.</li>
+ * </ol>
  *
- * <p>Test code never imports RestAssured directly — all HTTP traffic flows
- * through this class. Phase 4 will extend this with POST/PUT/PATCH/DELETE and
- * with payload-body support; Phase 3 keeps the surface intentionally minimal
- * so wiring problems are easy to diagnose.
+ * <p>The parsed response context uses Jayway JsonPath ({@code $.field} syntax),
+ * matching the payload syntax, so assertions read responses with the same path
+ * style used to build requests.
  */
 public class ApiService {
 
@@ -46,37 +49,93 @@ public class ApiService {
         this.config = ConfigManager.get();
     }
 
-    /**
-     * Issues a GET against {@code endpoint} (relative to the configured base URL)
-     * and stores the response into {@link TestContext}.
-     *
-     * @return the same {@link Response} stored in the context, for callers that
-     *         want to assert immediately
-     */
+    // -------------------------------------------------------------------------
+    // HTTP verbs
+    // -------------------------------------------------------------------------
+
     public Response get(String endpoint) {
+        log.info("GET {}{}", config.apiBaseUrl(), endpoint);
+        return execute("GET", endpoint, null);
+    }
+
+    public Response post(String endpoint, String body) {
+        log.info("POST {}{}", config.apiBaseUrl(), endpoint);
+        return execute("POST", endpoint, body);
+    }
+
+    public Response put(String endpoint, String body) {
+        log.info("PUT {}{}", config.apiBaseUrl(), endpoint);
+        return execute("PUT", endpoint, body);
+    }
+
+    public Response patch(String endpoint, String body) {
+        log.info("PATCH {}{}", config.apiBaseUrl(), endpoint);
+        return execute("PATCH", endpoint, body);
+    }
+
+    public Response delete(String endpoint) {
+        log.info("DELETE {}{}", config.apiBaseUrl(), endpoint);
+        return execute("DELETE", endpoint, null);
+    }
+
+    // -------------------------------------------------------------------------
+    // Core execution
+    // -------------------------------------------------------------------------
+
+    private Response execute(String method, String endpoint, String body) {
         String token = authManager.getToken();
         ctx.setAuthToken(token);
 
-        RequestSpecification spec = new RequestSpecBuilder()
+        RequestSpecBuilder builder = new RequestSpecBuilder()
                 .setBaseUri(config.apiBaseUrl())
                 .addHeader("Authorization", "Bearer " + token)
-                .addHeaders(ctx.getHeaders())
-                .build()
+                .addHeaders(ctx.getHeaders());
+
+        if (body != null) {
+            builder.setContentType("application/json").setBody(body);
+        }
+
+        RequestSpecification spec = builder.build()
                 .filter(new ContextCapturingFilter(ctx));
 
-        log.info("GET {}{}", config.apiBaseUrl(), endpoint);
-        Response response = RestAssured.given().spec(spec).when().get(endpoint);
+        RequestSpecification request = RestAssured.given().spec(spec);
+        Response response = switch (method) {
+            case "GET"    -> request.when().get(endpoint);
+            case "POST"   -> request.when().post(endpoint);
+            case "PUT"    -> request.when().put(endpoint);
+            case "PATCH"  -> request.when().patch(endpoint);
+            case "DELETE" -> request.when().delete(endpoint);
+            default -> throw new IllegalArgumentException("Unsupported method: " + method);
+        };
+
         ctx.setResponse(response);
+        parseResponseBody(response);
         return response;
     }
 
     /**
-     * RestAssured filter that captures the full request and response as
-     * human-readable strings into the {@link TestContext}.
-     *
-     * <p>This is what lets Phase 4's hooks attach request/response detail to
-     * the Extent report when a scenario fails. The strings are also useful in
-     * console logs when running locally.
+     * Parses the response body into a Jayway DocumentContext and stores it on
+     * the context, so assertions can read fields with {@code $.path} syntax.
+     * Bodies that aren't valid JSON (empty 204s, plain-text errors) are
+     * tolerated — the response context is simply left null.
+     */
+    private void parseResponseBody(Response response) {
+        String bodyString = response.getBody() == null ? null : response.getBody().asString();
+        if (bodyString == null || bodyString.isBlank()) {
+            ctx.setResponseContext(null);
+            return;
+        }
+        try {
+            ctx.setResponseContext(JsonUtils.parse(bodyString));
+        } catch (Exception e) {
+            log.debug("Response body is not valid JSON; skipping JsonPath parse");
+            ctx.setResponseContext(null);
+        }
+    }
+
+    /**
+     * Captures the fully-resolved request and the response as readable strings
+     * into the {@link TestContext}, for attachment to the Extent report on failure.
      */
     private static final class ContextCapturingFilter implements Filter {
         private final TestContext ctx;
@@ -89,16 +148,16 @@ public class ApiService {
         public Response filter(FilterableRequestSpecification requestSpec,
                                FilterableResponseSpecification responseSpec,
                                FilterContext filterContext) {
-            // Capture request before sending
             String reqLog = "Method  : " + requestSpec.getMethod() + "\n"
                     + "URI     : " + requestSpec.getURI() + "\n"
-                    + "Headers : " + requestSpec.getHeaders();
+                    + "Headers : " + requestSpec.getHeaders() + "\n"
+                    + "Body    : " + (requestSpec.getBody() == null ? "<none>" : requestSpec.getBody());
             ctx.setRequestLog(reqLog);
 
             Response response = filterContext.next(requestSpec, responseSpec);
 
-            // Capture response after receiving
             String respLog = "Status  : " + response.getStatusCode() + "\n"
+                    + "Time    : " + response.getTime() + " ms\n"
                     + "Headers : " + response.getHeaders() + "\n"
                     + "Body    : " + response.getBody().asPrettyString();
             ctx.setResponseLog(respLog);
