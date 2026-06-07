@@ -3,6 +3,7 @@ package com.framework.tests.hooks;
 import com.aventstack.extentreports.ExtentTest;
 import com.aventstack.extentreports.Status;
 import com.framework.api.auth.AuthManager;
+import com.framework.common.config.ConfigManager;
 import com.framework.common.context.TestContext;
 import com.framework.common.report.ExtentManager;
 import com.framework.common.report.ExtentTestManager;
@@ -16,36 +17,26 @@ import org.apache.logging.log4j.Logger;
 /**
  * Cucumber hooks for API scenarios.
  *
- * <p>{@link Before} runs before every scenario:
+ * <p>{@link #beforeScenario(Scenario)} ({@code @Before}, order 0):
  * <ol>
  *   <li>Records scenario name and tags into {@link TestContext}.</li>
  *   <li>Creates an Extent test node and registers it on this thread.</li>
- *   <li>Eagerly resolves the OAuth2 token so auth failures surface with a
- *       clear, top-of-scenario error rather than embedded in a step trace.</li>
+ *   <li>Selects the auth mode: scenarios tagged {@code @userAuth} use the
+ *       refresh-token (user) flow; all others use client credentials.</li>
+ *   <li>Seeds {@code userId} into scenarioVars from config, so write scenarios
+ *       can reference {@code ${userId}} in endpoints.</li>
+ *   <li>Eagerly resolves the token so auth failures surface at scenario start.</li>
  * </ol>
  *
- * <p>Two {@link After} hooks run after every scenario, in this order:
- * <ol>
- *   <li>{@link #flushSoftAssertions(Scenario)} (order = 100) — fails the
- *       scenario if any soft assertions were recorded. Must run before the
- *       reporting hook so {@link Scenario#isFailed()} reflects assertion
- *       failures, not just step exceptions.</li>
- *   <li>{@link #afterScenario(Scenario)} (order = 0, default) — writes the
- *       scenario outcome to the Extent report and flushes.</li>
- * </ol>
- *
- * <p>Cucumber runs {@code @After} hooks in <em>decreasing</em> order of the
- * {@code order} parameter — so {@code order = 100} runs <em>before</em>
- * {@code order = 0}. Counter-intuitive but documented Cucumber behaviour.
- *
- * <p>PicoContainer instantiates this hook class per scenario, injecting
- * {@link TestContext}, {@link AuthManager}, and {@link AssertionService}.
- * The injected instances are the same ones the step classes receive — that's
- * the whole point of the scenario-scoped DI container.
+ * <p>Two {@code @After} hooks run in decreasing order: soft-assertion flush
+ * (order 100) before the reporting hook (order 0), so {@link Scenario#isFailed()}
+ * reflects assertion failures by the time reporting reads it.
  */
 public class ApiHooks {
 
     private static final Logger log = LogUtils.getLogger(ApiHooks.class);
+
+    private static final String USER_AUTH_TAG = "@userAuth";
 
     private final TestContext ctx;
     private final AuthManager authManager;
@@ -66,24 +57,29 @@ public class ApiHooks {
         scenario.getSourceTagNames().forEach(test::assignCategory);
         ExtentTestManager.set(test);
 
-        log.info("Scenario START: {} {}", scenario.getName(), scenario.getSourceTagNames());
+        // Select auth mode based on the @userAuth tag.
+        boolean needsUserAuth = scenario.getSourceTagNames().contains(USER_AUTH_TAG);
+        authManager.setMode(needsUserAuth
+                ? AuthManager.AuthMode.USER
+                : AuthManager.AuthMode.CLIENT_CREDENTIALS);
 
-        // Resolve the token up-front. If auth is misconfigured, fail fast here
-        // with a clear error rather than during the first GET.
-        String token = authManager.getToken();
-        ctx.setAuthToken(token);
+        // Make the configured Spotify user id available as ${userId} in steps.
+        String userId = ConfigManager.get().userId();
+        if (userId != null && !userId.isBlank()) {
+            ctx.getScenarioVars().put("userId", userId);
+        }
+
+        log.info("Scenario START: {} {} (auth={})",
+                scenario.getName(), scenario.getSourceTagNames(), authManager.getMode());
+
+        // Resolve the token up-front so misconfiguration fails fast.
+        ctx.setAuthToken(authManager.getToken());
     }
 
-    /**
-     * Runs <em>before</em> {@link #afterScenario(Scenario)} thanks to the higher
-     * {@code order} value. If any soft assertions accumulated during the
-     * scenario, this throws — which Cucumber records as a scenario failure
-     * before {@code afterScenario} inspects {@link Scenario#isFailed()}.
-     */
     @After(order = 100)
     public void flushSoftAssertions(Scenario scenario) {
         if (assertions.hasFailures()) {
-            assertions.assertAll();    // throws AssertionError describing every failure
+            assertions.assertAll();
         }
     }
 
@@ -100,8 +96,6 @@ public class ApiHooks {
 
         log.info("Scenario END:   {} -> {}", scenario.getName(), scenario.getStatus());
 
-        // Phase 3 flushes per scenario. Phase 7 will move this into a TestNG
-        // ISuiteListener so it runs once at suite end.
         ExtentManager.flush();
         ExtentTestManager.remove();
     }

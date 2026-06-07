@@ -12,66 +12,102 @@ import java.time.Duration;
 /**
  * Resolves an auth token for the configured API.
  *
- * <p>Phase 3 supports only OAuth2 client credentials flow (Spotify's
- * server-to-server flow): POSTs to the configured token URL with
- * {@code grant_type=client_credentials} and HTTP Basic auth carrying
- * {@code client_id:client_secret}. The response contains {@code access_token}
- * and {@code expires_in} (seconds).
+ * <p>Supports two OAuth2 grant types, selected per scenario:
+ * <ul>
+ *   <li>{@link AuthMode#CLIENT_CREDENTIALS} — server-to-server flow for read
+ *       endpoints (search, browse). No user context. The default.</li>
+ *   <li>{@link AuthMode#USER} — refresh-token exchange (Authorization Code flow)
+ *       for write endpoints (create/modify playlists). Carries user context.</li>
+ * </ul>
  *
- * <p>Tokens are cached in a <strong>process-wide</strong> {@link TokenCache}
- * (the {@code SHARED_CACHE} static field). This is deliberate: PicoContainer
- * creates a new {@code AuthManager} per scenario, but we don't want each
- * scenario to refetch a token from Spotify. Sharing the cache means the first
- * scenario fetches, the rest reuse — including across parallel threads, since
- * {@code TokenCache} is internally thread-safe.
+ * <p>The caller (typically {@code ApiHooks}, which knows the scenario's tags)
+ * sets the mode via {@link #setMode(AuthMode)} before any request. A scenario
+ * tagged {@code @userAuth} uses {@link AuthMode#USER}; everything else uses
+ * client credentials.
  *
- * <p>Other auth types (Bearer/Basic/API Key) will plug in here in later phases
- * via a strategy switch on {@link AppConfig#authType()}.
+ * <p>Both token types are cached in a <strong>process-wide</strong>
+ * {@link TokenCache}, keyed so the two never collide. The first scenario of
+ * each type fetches; the rest reuse — including across parallel threads, since
+ * {@code TokenCache} is thread-safe.
+ *
+ * <h2>Refresh-token flow (USER mode)</h2>
+ * A long-lived refresh token (obtained once via manual user consent) is
+ * exchanged for a short-lived access token via:
+ * <pre>
+ *   POST /api/token
+ *   Authorization: Basic base64(client_id:client_secret)
+ *   grant_type=refresh_token&amp;refresh_token=&lt;the refresh token&gt;
+ * </pre>
+ * Spotify returns a fresh {@code access_token} (and sometimes a new
+ * {@code refresh_token}, which we ignore — the original keeps working).
  */
 public class AuthManager {
 
     private static final Logger log = LogUtils.getLogger(AuthManager.class);
 
-    /**
-     * Process-wide token cache, shared across all PicoContainer scenarios.
-     * Static to avoid per-scenario token refetching.
-     */
+    /** Cache keys — distinct so client and user tokens never collide. */
+    private static final String CLIENT_CACHE_KEY = "client_credentials";
+    private static final String USER_CACHE_KEY = "user_refresh";
+
+    /** Process-wide token cache, shared across all PicoContainer scenarios. */
     private static final TokenCache SHARED_CACHE = new TokenCache();
 
     private final AppConfig config;
 
-    /**
-     * PicoContainer-injectable constructor. {@link ConfigManager} is a singleton
-     * so we resolve it directly rather than receiving it via injection.
-     */
+    /** Per-scenario auth mode; defaults to client credentials. */
+    private AuthMode mode = AuthMode.CLIENT_CREDENTIALS;
+
     public AuthManager() {
         this.config = ConfigManager.get();
     }
 
-    /**
-     * Returns a valid access token for the configured auth scheme.
-     * Fetches and caches a new token if no cached entry is valid.
-     */
-    public String getToken() {
-        String authType = config.authType();
-        if (!"oauth2".equalsIgnoreCase(authType)) {
-            throw new UnsupportedOperationException(
-                    "Phase 3 only supports auth.type=oauth2. Got: " + authType);
-        }
-        return getOAuth2ClientCredentialsToken();
+    /** The two supported grant types. */
+    public enum AuthMode {
+        CLIENT_CREDENTIALS,
+        USER
     }
 
-    private String getOAuth2ClientCredentialsToken() {
+    /**
+     * Selects the auth mode for the current scenario. Called by hooks based on
+     * scenario tags before any request is made.
+     */
+    public void setMode(AuthMode mode) {
+        this.mode = mode;
+    }
+
+    public AuthMode getMode() {
+        return mode;
+    }
+
+    /**
+     * Returns a valid access token for the currently selected mode.
+     */
+    public String getToken() {
+        if (!"oauth2".equalsIgnoreCase(config.authType())) {
+            throw new UnsupportedOperationException(
+                    "Only auth.type=oauth2 is supported. Got: " + config.authType());
+        }
+        return switch (mode) {
+            case CLIENT_CREDENTIALS -> getClientCredentialsToken();
+            case USER -> getUserToken();
+        };
+    }
+
+    // -------------------------------------------------------------------------
+    // Client credentials grant (read endpoints)
+    // -------------------------------------------------------------------------
+
+    private String getClientCredentialsToken() {
         String clientId = require("api.auth.client.id", config.clientId());
         String clientSecret = require("api.auth.client.secret", config.clientSecret());
 
-        String cached = SHARED_CACHE.get(clientId);
+        String cached = SHARED_CACHE.get(CLIENT_CACHE_KEY);
         if (cached != null) {
-            log.debug("Reusing cached OAuth2 token for client {}", maskedClientId(clientId));
+            log.debug("Reusing cached client-credentials token");
             return cached;
         }
 
-        log.info("Requesting new OAuth2 token from {}", config.tokenUrl());
+        log.info("Requesting new client-credentials token from {}", config.tokenUrl());
         Response response = RestAssured.given()
                 .auth().preemptive().basic(clientId, clientSecret)
                 .contentType("application/x-www-form-urlencoded")
@@ -79,6 +115,41 @@ public class AuthManager {
                 .when()
                 .post(config.tokenUrl());
 
+        return extractAndCache(response, CLIENT_CACHE_KEY);
+    }
+
+    // -------------------------------------------------------------------------
+    // Refresh-token grant / Authorization Code flow (write endpoints)
+    // -------------------------------------------------------------------------
+
+    private String getUserToken() {
+        String clientId = require("api.auth.client.id", config.clientId());
+        String clientSecret = require("api.auth.client.secret", config.clientSecret());
+        String refreshToken = require("api.auth.refresh.token", config.refreshToken());
+
+        String cached = SHARED_CACHE.get(USER_CACHE_KEY);
+        if (cached != null) {
+            log.debug("Reusing cached user token");
+            return cached;
+        }
+
+        log.info("Exchanging refresh token for a user access token at {}", config.tokenUrl());
+        Response response = RestAssured.given()
+                .auth().preemptive().basic(clientId, clientSecret)
+                .contentType("application/x-www-form-urlencoded")
+                .formParam("grant_type", "refresh_token")
+                .formParam("refresh_token", refreshToken)
+                .when()
+                .post(config.tokenUrl());
+
+        return extractAndCache(response, USER_CACHE_KEY);
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared response handling
+    // -------------------------------------------------------------------------
+
+    private String extractAndCache(Response response, String cacheKey) {
         if (response.statusCode() != 200) {
             throw new IllegalStateException(
                     "Token endpoint returned " + response.statusCode()
@@ -94,15 +165,11 @@ public class AuthManager {
                             + response.body().asString());
         }
 
-        SHARED_CACHE.put(clientId, token, Duration.ofSeconds(expiresInSeconds));
-        log.info("OAuth2 token acquired (expires in {}s)", expiresInSeconds);
+        SHARED_CACHE.put(cacheKey, token, Duration.ofSeconds(expiresInSeconds));
+        log.info("Token acquired for '{}' (expires in {}s)", cacheKey, expiresInSeconds);
         return token;
     }
 
-    /**
-     * Returns {@code value}, or throws if it's blank — used to fail fast with
-     * a clear error when credentials are not supplied at runtime.
-     */
     private static String require(String configKey, String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalStateException(
@@ -110,10 +177,5 @@ public class AuthManager {
                             + "Supply via -D" + configKey + "=... or an env-specific properties file.");
         }
         return value;
-    }
-
-    /** Returns the first 4 chars of the client ID for logging, never the full value. */
-    private static String maskedClientId(String clientId) {
-        return clientId.length() <= 4 ? "****" : clientId.substring(0, 4) + "****";
     }
 }

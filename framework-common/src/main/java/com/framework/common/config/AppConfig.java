@@ -18,7 +18,7 @@ import org.aeonbits.owner.Config.Sources;
  * <p>The {@code ${env}} placeholder is resolved at load time from the {@code env}
  * system property (defaults to {@code dev} if not provided).
  *
- * <p>Access via {ConfigManager.get()} — never instantiate directly.
+ * <p>Access via {@link ConfigManager#get()} — never instantiate directly.
  */
 @LoadPolicy(LoadType.MERGE)
 @Sources({
@@ -48,6 +48,16 @@ public interface AppConfig extends Config {
     @Key("api.auth.client.secret")
     String clientSecret();
 
+    // Phase 4.5 — Authorization Code (user) flow.
+    // The long-lived refresh token obtained via one-time manual user consent.
+    @Key("api.auth.refresh.token")
+    String refreshToken();
+
+    // The Spotify user ID (alphanumeric account id) used for user-scoped
+    // endpoints like POST /users/{id}/playlists.
+    @Key("api.user.id")
+    String userId();
+
     @Key("api.default.timeout.ms")
     @DefaultValue("5000")
     int apiTimeout();
@@ -64,6 +74,5 @@ public interface AppConfig extends Config {
     @DefaultValue("2")
     int retryCount();
 
-    // UI keys are intentionally omitted in Phase 1.
-    // They will be added in Phase 5 when framework-ui is built out.
+    // UI keys are added in Phase 5.
 }

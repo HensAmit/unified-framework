@@ -44,7 +44,7 @@ public class ValueParser {
      * @return the typed value, suitable for writing into a JsonPath document
      */
     public Object parse(String rawValue, String type) {
-        String normalisedType = type == null ? "string" : type.trim().toLowerCase();
+        String normalisedType = (type == null) ? "string" : type.trim().toLowerCase();
 
         // 'null' ignores the value entirely.
         if ("null".equals(normalisedType)) {
