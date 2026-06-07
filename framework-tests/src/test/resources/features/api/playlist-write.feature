@@ -42,7 +42,7 @@ Feature: Spotify playlist write operations
     When I send a POST request to "/playlists/${playlistId}/tracks"
     Then I assert the response:
       | type   | path        | expected    |
-      | status |             | 301         |
+      | status |             | 201         |
       | jsonpath | $.snapshot_id | is not null |
     When I send a DELETE request to "/playlists/${playlistId}/followers"
     Then I assert the response:
