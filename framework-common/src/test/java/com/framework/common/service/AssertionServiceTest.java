@@ -5,102 +5,97 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 class AssertionServiceTest {
 
+    private TestContext ctx;
     private AssertionService assertions;
 
     @BeforeEach
     void setUp() {
-        assertions = new AssertionService(new TestContext());
+        ctx = new TestContext();
+        assertions = new AssertionService(ctx);
+    }
+
+    // --- passing assertions do not throw ---
+
+    @Test
+    @DisplayName("assertEquals does not throw when values match")
+    void assertEqualsPasses() {
+        assertDoesNotThrow(() -> assertions.assertEquals("equal", 200, 200));
+        assertNull(ctx.getFailureStackTrace(), "no trace should be captured on success");
     }
 
     @Test
-    @DisplayName("assertAll succeeds silently when no failures recorded")
-    void noFailuresPassesCleanly() {
-        assertions.assertEquals("equality", "x", "x");
-        assertions.assertNotNull("non-null", "y");
-        assertions.assertTrue("boolean true", true);
-
-        assertDoesNotThrow(() -> assertions.assertAll());
-        assertFalse(assertions.hasFailures());
-        assertTrue(assertions.getFailureMessages().isEmpty());
+    @DisplayName("assertNotNull does not throw for a non-null value")
+    void assertNotNullPasses() {
+        assertDoesNotThrow(() -> assertions.assertNotNull("present", "x"));
     }
 
     @Test
-    @DisplayName("hasFailures becomes true after any failed assertion")
-    void hasFailuresAfterFailedAssertion() {
-        assertFalse(assertions.hasFailures());
-
-        assertions.assertEquals("intentional fail", "actual", "expected");
-
-        assertTrue(assertions.hasFailures());
+    @DisplayName("assertContains does not throw when substring is present")
+    void assertContainsPasses() {
+        assertDoesNotThrow(() -> assertions.assertContains("contains", "Radiohead", "Radio"));
     }
 
     @Test
-    @DisplayName("getFailureMessages collects all failure descriptions")
-    void collectsAllFailures() {
-        assertions.assertEquals("first", 1, 2);
-        assertions.assertEquals("second", "a", "b");
-        assertions.assertNotNull("third", null);
+    @DisplayName("assertLessThanOrEqualTo does not throw when within bound")
+    void assertLessThanOrEqualToPasses() {
+        assertDoesNotThrow(() -> assertions.assertLessThanOrEqualTo("time", 100L, 2000L));
+    }
 
-        List<String> messages = assertions.getFailureMessages();
-        assertEquals(3, messages.size());
-        // Each description should appear in exactly one message
-        assertTrue(messages.stream().anyMatch(m -> m.contains("first")));
-        assertTrue(messages.stream().anyMatch(m -> m.contains("second")));
-        assertTrue(messages.stream().anyMatch(m -> m.contains("third")));
+    // --- failing assertions throw immediately (hard) ---
+
+    @Test
+    @DisplayName("assertEquals throws immediately when values differ")
+    void assertEqualsFailsHard() {
+        assertThrows(AssertionError.class,
+                () -> assertions.assertEquals("status", 200, 201));
     }
 
     @Test
-    @DisplayName("assertAll throws AssertionError listing every failure")
-    void assertAllThrowsWithAllFailures() {
-        assertions.assertEquals("first", 1, 2);
-        assertions.assertEquals("second", "a", "b");
-
-        AssertionError err = assertThrows(AssertionError.class, () -> assertions.assertAll());
-        // AssertJ's MultipleFailuresError includes both descriptions
-        assertTrue(err.getMessage().contains("first"));
-        assertTrue(err.getMessage().contains("second"));
+    @DisplayName("assertNotNull throws for null")
+    void assertNotNullFailsHard() {
+        assertThrows(AssertionError.class,
+                () -> assertions.assertNotNull("present", null));
     }
 
     @Test
-    @DisplayName("scenario continues collecting after a failure (soft semantics)")
-    void softSemantics() {
-        assertions.assertEquals("first will fail", 1, 2);
-        // The fact that we reach this line at all proves soft semantics
-        assertions.assertEquals("second still runs", "x", "x");
-
-        // Only the first one failed
-        assertEquals(1, assertions.getFailureMessages().size());
+    @DisplayName("assertTrue throws for false")
+    void assertTrueFailsHard() {
+        assertThrows(AssertionError.class,
+                () -> assertions.assertTrue("flag", false));
     }
 
     @Test
-    @DisplayName("manual fail() records a message")
-    void manualFail() {
-        assertions.fail("unexpected branch reached");
-        assertTrue(assertions.hasFailures());
-        AssertionError err = assertThrows(AssertionError.class, () -> assertions.assertAll());
-        assertTrue(err.getMessage().contains("unexpected branch"));
+    @DisplayName("fail throws immediately")
+    void failThrowsHard() {
+        assertThrows(AssertionError.class,
+                () -> assertions.fail("boom"));
+    }
+
+    // --- a failure captures the stack trace into the context ---
+
+    @Test
+    @DisplayName("a failed assertion captures its stack trace into the context")
+    void capturesStackTraceOnFailure() {
+        assertThrows(AssertionError.class,
+                () -> assertions.assertEquals("status", 200, 201));
+        String trace = ctx.getFailureStackTrace();
+        assertNotNull(trace, "stack trace should be captured");
+        assertFalse(trace.isBlank(), "stack trace should not be blank");
+        // A real stack trace has frame lines: newline + tab + "at ".
+        assertTrue(trace.contains("\n\tat "), "trace should contain stack frames");
     }
 
     @Test
-    @DisplayName("assertContains works as substring check")
-    void contains() {
-        assertions.assertContains("substr present",  "hello world", "world");
-        assertions.assertContains("substr missing",  "hello world", "xyz");
-        assertEquals(1, assertions.getFailureMessages().size());
-    }
-
-    @Test
-    @DisplayName("assertLessThanOrEqualTo enforces upper bound")
-    void lessThanOrEqual() {
-        assertions.assertLessThanOrEqualTo("under bound", 100, 200);
-        assertions.assertLessThanOrEqualTo("at bound", 200, 200);
-        assertions.assertLessThanOrEqualTo("over bound", 300, 200);
-        assertEquals(1, assertions.getFailureMessages().size());
+    @DisplayName("failWith captures the given error's trace and rethrows it")
+    void failWithRethrows() {
+        AssertionError original = new AssertionError("schema mismatch");
+        AssertionError thrown = assertThrows(AssertionError.class,
+                () -> assertions.failWith(original));
+        assertSame(original, thrown, "the same error instance should propagate");
+        assertNotNull(ctx.getFailureStackTrace());
     }
 }

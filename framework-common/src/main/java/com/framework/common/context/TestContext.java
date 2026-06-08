@@ -8,129 +8,107 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The single, shared state object for a Cucumber scenario.
+ * Scenario-scoped shared state, created fresh per scenario by PicoContainer.
  *
- * <p>PicoContainer instantiates one {@code TestContext} per scenario and injects
- * it into every step class, hook, page object, and service that declares it as
- * a constructor parameter. There is no static state — each scenario gets its
- * own context, which is exactly what makes parallel execution safe.
+ * <p>No static/global state — each scenario gets its own instance, which is what
+ * makes parallel execution safe. All step classes, services, and hooks for a
+ * scenario receive this same instance via constructor injection.
  *
- * <p>Fields are split into three groups:
- * <ul>
- *   <li><b>API fields</b> — request/response state, auth token, captured logs</li>
- *   <li><b>UI fields</b> — WebDriver, current page name, test data row from Excel</li>
- *   <li><b>Shared fields</b> — placeholder vars, headers, scenario metadata</li>
- * </ul>
+ * <p>Collections are initialized eagerly so callers never face nulls.
  *
- * <p>Most fields are populated by services and hooks during the scenario.
- * Collection fields are initialised to empty collections so callers never
- * encounter nulls; they may add to them freely.
- *
- * <p><strong>On the use of {@link Object} for {@code response} and {@code driver}:</strong>
- * {@code framework-common} is the lowest module and intentionally has no
- * dependency on RestAssured or Selenium. Storing those as {@code Object}
- * keeps the dependency graph clean. API and UI services know the real type
- * and cast on retrieval. JsonPath's {@link DocumentContext} is included as a
- * direct type because JsonPath {@code is} part of the common surface — both
- * API and UI code may need to work with parsed JSON.
- *
- * <p>The class is intentionally a simple mutable bean — no encapsulation
- * heroics, because PicoContainer needs trivial wiring and step code reads
- * cleaner with direct getter/setter access.
+ * <p>The {@code response} and {@code driver} fields are typed as {@link Object}
+ * deliberately: {@code framework-common} must not depend on RestAssured or
+ * Selenium. The API/UI modules cast them back to their concrete types.
  */
 public class TestContext {
 
-    // -------------------------------------------------------------------------
-    // API state
-    // -------------------------------------------------------------------------
-
-    private DocumentContext requestContext;
-    private Object response;                   // io.restassured.response.Response
-    private DocumentContext responseContext;
+    // --- Request/response state (API) ---
+    private DocumentContext requestContext;     // current request payload
+    private Object response;                     // raw RestAssured Response
+    private DocumentContext responseContext;     // parsed response body
     private String authToken;
-    private final Map<String, Object> testDataMap;
-    private String requestLog;
-    private String responseLog;
 
-    // -------------------------------------------------------------------------
-    // UI state
-    // -------------------------------------------------------------------------
+    // --- Shared scenario data ---
+    private final Map<String, Object> scenarioVars;   // for ${variable} chaining
+    private final Map<String, String> headers;        // per-scenario request headers
+    private final Map<String, Object> testDataMap;    // IDs created in setup
 
-    private Object driver;                     // org.openqa.selenium.WebDriver
-    private String currentPage;
-    private final Map<String, String> uiTestData;
-
-    // -------------------------------------------------------------------------
-    // Shared state
-    // -------------------------------------------------------------------------
-
-    private final Map<String, Object> scenarioVars;
-    private final Map<String, String> headers;
+    // --- Scenario metadata ---
     private String scenarioName;
     private final List<String> scenarioTags;
 
-    // -------------------------------------------------------------------------
-    // Construction
-    // -------------------------------------------------------------------------
+    // --- Captured HTTP interactions (for failure reporting) ---
+    // A scenario may make several HTTP calls; we keep them all so the report can
+    // show every request/response. Under hard-assert semantics the last entry is
+    // the call whose assertion failed (execution stops there).
+    private final List<HttpInteraction> httpInteractions;
 
-    /**
-     * Default constructor used by PicoContainer.
-     * Initialises all collection fields to empty mutable collections.
-     */
+    // --- Captured failure stack trace (for failure reporting) ---
+    // Set by AssertionService at the moment an assertion throws, so the report
+    // can show the same trace seen on the console. Stays null when no assertion
+    // failed (or the failure came from a non-assertion exception).
+    private String failureStackTrace;
+
+    // --- UI state (populated in Phase 5+) ---
+    private Object driver;
+
     public TestContext() {
-        this.testDataMap = new HashMap<>();
-        this.uiTestData = new HashMap<>();
         this.scenarioVars = new HashMap<>();
         this.headers = new HashMap<>();
+        this.testDataMap = new HashMap<>();
         this.scenarioTags = new ArrayList<>();
+        this.httpInteractions = new ArrayList<>();
     }
 
-    // -------------------------------------------------------------------------
-    // API getters / setters
-    // -------------------------------------------------------------------------
+    /** One captured request/response pair from a single HTTP call. */
+    public record HttpInteraction(String requestLog, String responseLog) {}
 
+    // --- requestContext ---
     public DocumentContext getRequestContext() { return requestContext; }
     public void setRequestContext(DocumentContext requestContext) { this.requestContext = requestContext; }
 
+    // --- response ---
     public Object getResponse() { return response; }
     public void setResponse(Object response) { this.response = response; }
 
+    // --- responseContext ---
     public DocumentContext getResponseContext() { return responseContext; }
     public void setResponseContext(DocumentContext responseContext) { this.responseContext = responseContext; }
 
+    // --- authToken ---
     public String getAuthToken() { return authToken; }
     public void setAuthToken(String authToken) { this.authToken = authToken; }
 
-    public Map<String, Object> getTestDataMap() { return testDataMap; }
-
-    public String getRequestLog() { return requestLog; }
-    public void setRequestLog(String requestLog) { this.requestLog = requestLog; }
-
-    public String getResponseLog() { return responseLog; }
-    public void setResponseLog(String responseLog) { this.responseLog = responseLog; }
-
-    // -------------------------------------------------------------------------
-    // UI getters / setters
-    // -------------------------------------------------------------------------
-
-    public Object getDriver() { return driver; }
-    public void setDriver(Object driver) { this.driver = driver; }
-
-    public String getCurrentPage() { return currentPage; }
-    public void setCurrentPage(String currentPage) { this.currentPage = currentPage; }
-
-    public Map<String, String> getUiTestData() { return uiTestData; }
-
-    // -------------------------------------------------------------------------
-    // Shared getters / setters
-    // -------------------------------------------------------------------------
-
+    // --- scenarioVars ---
     public Map<String, Object> getScenarioVars() { return scenarioVars; }
 
+    // --- headers ---
     public Map<String, String> getHeaders() { return headers; }
 
+    // --- testDataMap ---
+    public Map<String, Object> getTestDataMap() { return testDataMap; }
+
+    // --- scenarioName ---
     public String getScenarioName() { return scenarioName; }
     public void setScenarioName(String scenarioName) { this.scenarioName = scenarioName; }
 
+    // --- scenarioTags ---
     public List<String> getScenarioTags() { return scenarioTags; }
+
+    // --- httpInteractions ---
+    /** Appends one captured request/response pair. Called by the API filter per HTTP call. */
+    public void addHttpInteraction(String requestLog, String responseLog) {
+        this.httpInteractions.add(new HttpInteraction(requestLog, responseLog));
+    }
+
+    /** All captured interactions for this scenario, in call order. */
+    public List<HttpInteraction> getHttpInteractions() { return httpInteractions; }
+
+    // --- failureStackTrace ---
+    public String getFailureStackTrace() { return failureStackTrace; }
+    public void setFailureStackTrace(String failureStackTrace) { this.failureStackTrace = failureStackTrace; }
+
+    // --- driver (UI) ---
+    public Object getDriver() { return driver; }
+    public void setDriver(Object driver) { this.driver = driver; }
 }

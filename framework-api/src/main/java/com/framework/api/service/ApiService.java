@@ -20,20 +20,16 @@ import org.apache.logging.log4j.Logger;
  * The framework's HTTP client. All API traffic flows through this class — test
  * code never imports RestAssured directly.
  *
- * <p>Phase 4 adds POST/PUT/PATCH/DELETE and request-body support to the GET-only
- * Phase 3 version. Every verb:
+ * <p>Supports GET/POST/PUT/PATCH/DELETE with optional JSON bodies. Every verb:
  * <ol>
  *   <li>resolves the auth token and attaches it as a Bearer header,</li>
  *   <li>attaches any headers staged on {@link TestContext#getHeaders()},</li>
  *   <li>attaches a body (for write verbs) from the passed JSON string,</li>
  *   <li>executes via RestAssured,</li>
  *   <li>stores the {@link Response} and a parsed response DocumentContext into
- *       the context, plus captures request/response logs via a filter.</li>
+ *       the context, and appends the captured request/response to the context's
+ *       interaction list via a filter.</li>
  * </ol>
- *
- * <p>The parsed response context uses Jayway JsonPath ({@code $.field} syntax),
- * matching the payload syntax, so assertions read responses with the same path
- * style used to build requests.
  */
 public class ApiService {
 
@@ -113,12 +109,6 @@ public class ApiService {
         return response;
     }
 
-    /**
-     * Parses the response body into a Jayway DocumentContext and stores it on
-     * the context, so assertions can read fields with {@code $.path} syntax.
-     * Bodies that aren't valid JSON (empty 204s, plain-text errors) are
-     * tolerated — the response context is simply left null.
-     */
     private void parseResponseBody(Response response) {
         String bodyString = response.getBody() == null ? null : response.getBody().asString();
         if (bodyString == null || bodyString.isBlank()) {
@@ -134,8 +124,9 @@ public class ApiService {
     }
 
     /**
-     * Captures the fully-resolved request and the response as readable strings
-     * into the {@link TestContext}, for attachment to the Extent report on failure.
+     * Captures each request/response pair and APPENDS it to the context's
+     * interaction list, so a multi-call scenario keeps every interaction (not
+     * just the last). The failure report can then show all of them.
      */
     private static final class ContextCapturingFilter implements Filter {
         private final TestContext ctx;
@@ -152,7 +143,6 @@ public class ApiService {
                     + "URI     : " + requestSpec.getURI() + "\n"
                     + "Headers : " + requestSpec.getHeaders() + "\n"
                     + "Body    : " + (requestSpec.getBody() == null ? "<none>" : requestSpec.getBody());
-            ctx.setRequestLog(reqLog);
 
             Response response = filterContext.next(requestSpec, responseSpec);
 
@@ -160,8 +150,8 @@ public class ApiService {
                     + "Time    : " + response.getTime() + " ms\n"
                     + "Headers : " + response.getHeaders() + "\n"
                     + "Body    : " + response.getBody().asPrettyString();
-            ctx.setResponseLog(respLog);
 
+            ctx.addHttpInteraction(reqLog, respLog);
             return response;
         }
     }

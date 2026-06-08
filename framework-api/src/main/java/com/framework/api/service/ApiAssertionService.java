@@ -17,25 +17,15 @@ import java.util.Map;
  *
  * <p>Lives in {@code framework-api} (not {@code framework-common}) because it
  * needs RestAssured's {@link Response} and the JSON Schema validator. It records
- * results through the common {@link AssertionService}, so all failures across a
- * scenario are collected and reported together (soft-assertion semantics).
+ * results through the common {@link AssertionService}.
+ *
+ * <p>Under hard-assert semantics, the row loop stops at the first failing row —
+ * the assertion throws and aborts the scenario. The HTTP call for that row has
+ * already been captured as an interaction, so the report shows it as the last
+ * (failing) interaction.
  *
  * <p>Driven by a DataTable with columns {@code | type | path | expected |}:
- * <ul>
- *   <li>{@code status}       — assert HTTP status code equals expected</li>
- *   <li>{@code jsonpath}     — assert value at {@code $.path}; supports
- *       {@code is not null}, {@code is null}, {@code contains X}, exact match</li>
- *   <li>{@code schema}       — validate body against a schema file in {@code /schemas/}</li>
- *   <li>{@code header}       — assert response header equals expected</li>
- *   <li>{@code responseTime} — assert response time ≤ expected milliseconds</li>
- *   <li>{@code arraySize}    — assert array length at {@code $.path}</li>
- *   <li>{@code save}         — extract value at {@code $.path} into scenarioVars
- *       under the key named in {@code expected} (for {@code ${}} chaining)</li>
- * </ul>
- *
- * <p>{@code expected} values have {@code ${placeholders}} resolved before
- * comparison — except for {@code save}, where {@code expected} is the variable
- * name to store under.
+ * status, jsonpath, schema, header, responseTime, arraySize, save.
  */
 public class ApiAssertionService {
 
@@ -103,8 +93,8 @@ public class ApiAssertionService {
             response.then().assertThat()
                     .body(JsonSchemaValidator.matchesJsonSchemaInClasspath("schemas/" + schemaFile));
         } catch (AssertionError e) {
-            // Convert the hard failure into a recorded soft failure.
-            assertions.fail("Schema validation failed for " + schemaFile + ": " + e.getMessage());
+            // Hard fail: capture the validator's trace and rethrow.
+            assertions.failWith(e);
         }
     }
 
@@ -135,10 +125,6 @@ public class ApiAssertionService {
         log.info("Saved {} = {} into scenarioVars", varName, value);
     }
 
-    /**
-     * Reads a value from the parsed response context using Jayway JsonPath.
-     * Returns null if the path is absent or no response body was parsed.
-     */
     private Object readPath(String path) {
         DocumentContext doc = ctx.getResponseContext();
         if (doc == null) {
@@ -147,7 +133,6 @@ public class ApiAssertionService {
         try {
             return doc.read(path);
         } catch (Exception e) {
-            // Path not present — treat as null so 'is null' assertions can pass.
             return null;
         }
     }
