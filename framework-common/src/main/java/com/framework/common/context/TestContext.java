@@ -16,9 +16,11 @@ import java.util.Map;
  *
  * <p>Collections are initialized eagerly so callers never face nulls.
  *
- * <p>The {@code response} and {@code driver} fields are typed as {@link Object}
- * deliberately: {@code framework-common} must not depend on RestAssured or
- * Selenium. The API/UI modules cast them back to their concrete types.
+ * <p>The {@code response} field is typed as {@link Object} deliberately:
+ * {@code framework-common} must not depend on RestAssured. The API module casts
+ * it back. The WebDriver is NOT held here — it lives in the UI module's
+ * {@code DriverManager} (a ThreadLocal), so page objects depend only on a driver
+ * rather than on this whole context.
  */
 public class TestContext {
 
@@ -38,19 +40,10 @@ public class TestContext {
     private final List<String> scenarioTags;
 
     // --- Captured HTTP interactions (for failure reporting) ---
-    // A scenario may make several HTTP calls; we keep them all so the report can
-    // show every request/response. Under hard-assert semantics the last entry is
-    // the call whose assertion failed (execution stops there).
     private final List<HttpInteraction> httpInteractions;
 
     // --- Captured failure stack trace (for failure reporting) ---
-    // Set by AssertionService at the moment an assertion throws, so the report
-    // can show the same trace seen on the console. Stays null when no assertion
-    // failed (or the failure came from a non-assertion exception).
     private String failureStackTrace;
-
-    // --- UI state (populated in Phase 5+) ---
-    private Object driver;
 
     public TestContext() {
         this.scenarioVars = new HashMap<>();
@@ -96,19 +89,13 @@ public class TestContext {
     public List<String> getScenarioTags() { return scenarioTags; }
 
     // --- httpInteractions ---
-    /** Appends one captured request/response pair. Called by the API filter per HTTP call. */
     public void addHttpInteraction(String requestLog, String responseLog) {
         this.httpInteractions.add(new HttpInteraction(requestLog, responseLog));
     }
 
-    /** All captured interactions for this scenario, in call order. */
     public List<HttpInteraction> getHttpInteractions() { return httpInteractions; }
 
     // --- failureStackTrace ---
     public String getFailureStackTrace() { return failureStackTrace; }
     public void setFailureStackTrace(String failureStackTrace) { this.failureStackTrace = failureStackTrace; }
-
-    // --- driver (UI) ---
-    public Object getDriver() { return driver; }
-    public void setDriver(Object driver) { this.driver = driver; }
 }

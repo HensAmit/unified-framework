@@ -9,14 +9,9 @@ import org.aeonbits.owner.Config.Sources;
  * Framework configuration loaded via the OWNER library.
  *
  * <p>Sources are merged in order — first match wins:
- * <ol>
- *   <li>{@code system:properties} — JVM system properties ({@code -Dapi.base.url=...})</li>
- *   <li>{@code classpath:config/${env}.properties} — environment-specific overrides</li>
- *   <li>{@code classpath:config/default.properties} — fallback defaults</li>
- * </ol>
- *
- * <p>The {@code ${env}} placeholder is resolved at load time from the {@code env}
- * system property (defaults to {@code dev} if not provided).
+ * system properties, then {@code config/${env}.properties}, then
+ * {@code config/default.properties}. The {@code ${env}} placeholder resolves
+ * from the {@code env} system property (defaults to {@code dev}).
  *
  * <p>Access via {@link ConfigManager#get()} — never instantiate directly.
  */
@@ -48,19 +43,34 @@ public interface AppConfig extends Config {
     @Key("api.auth.client.secret")
     String clientSecret();
 
-    // Phase 4.5 — Authorization Code (user) flow.
-    // The long-lived refresh token obtained via one-time manual user consent.
     @Key("api.auth.refresh.token")
     String refreshToken();
 
-    // The Spotify user ID (alphanumeric account id) used for user-scoped
-    // endpoints like POST /users/{id}/playlists.
     @Key("api.user.id")
     String userId();
 
     @Key("api.default.timeout.ms")
     @DefaultValue("5000")
     int apiTimeout();
+
+    // -------------------------------------------------------------------------
+    // UI configuration
+    // -------------------------------------------------------------------------
+
+    @Key("ui.base.url")
+    String uiBaseUrl();
+
+    @Key("ui.browser")
+    @DefaultValue("chrome")
+    String uiBrowser();
+
+    @Key("ui.headless")
+    @DefaultValue("false")
+    boolean uiHeadless();
+
+    @Key("ui.timeout.explicit.ms")
+    @DefaultValue("10000")
+    long uiExplicitTimeoutMs();
 
     // -------------------------------------------------------------------------
     // Cross-cutting
@@ -73,6 +83,4 @@ public interface AppConfig extends Config {
     @Key("retry.count")
     @DefaultValue("2")
     int retryCount();
-
-    // UI keys are added in Phase 5.
 }

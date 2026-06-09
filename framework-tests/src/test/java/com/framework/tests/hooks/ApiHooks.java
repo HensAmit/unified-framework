@@ -44,7 +44,7 @@ public class ApiHooks {
         this.authManager = authManager;
     }
 
-    @Before(order = 0)
+    @Before(value = "@api", order = 0)
     public void beforeScenario(Scenario scenario) {
         ctx.setScenarioName(scenario.getName());
         ctx.getScenarioTags().addAll(scenario.getSourceTagNames());
@@ -72,7 +72,7 @@ public class ApiHooks {
         ctx.setAuthToken(authManager.getToken());
     }
 
-    @After
+    @After("@api")
     public void afterScenario(Scenario scenario) {
         ExtentTest test = ExtentTestManager.get();
 

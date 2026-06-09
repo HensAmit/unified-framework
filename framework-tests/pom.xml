@@ -49,7 +49,8 @@
                 <configuration>
                     <skip>false</skip>
                     <suiteXmlFiles>
-                        <suiteXmlFile>${suiteXmlFile}</suiteXmlFile>
+                        <suiteXmlFile>src/test/resources/testng-api.xml</suiteXmlFile>
+                        <suiteXmlFile>src/test/resources/testng-ui.xml</suiteXmlFile>
                     </suiteXmlFiles>
                     <systemPropertyVariables>
                         <env>${env}</env>
