@@ -17,18 +17,22 @@ import org.apache.logging.log4j.Logger;
 import java.util.List;
 
 /**
- * Cucumber hooks for API scenarios.
+ * Cucumber hooks for API scenarios. Scoped to {@code @api} so they fire only for
+ * API scenarios (UiHooks, scoped to {@code @ui}, handle the UI side).
  *
  * <p>{@code @Before} (order 0): records metadata, creates the Extent node,
  * selects auth mode by the {@code @userAuth} tag, seeds {@code ${userId}}, and
  * eagerly resolves the token so misconfiguration fails fast.
  *
- * <p>Assertions are now hard — a failing assertion throws during the step,
- * Cucumber marks the scenario failed before any {@code @After} runs, so there is
- * no soft-assertion flush hook. The single {@code @After} reports the outcome:
- * on failure it attaches the captured stack trace (set by the AssertionService
- * at throw time) and every request/response interaction (the last of which is
- * the failing call, since execution stops there).
+ * <p>Assertions are hard — a failing assertion throws during the step, Cucumber
+ * marks the scenario failed before any {@code @After} runs. The {@code @After}
+ * reports the outcome: on failure it attaches the captured stack trace and every
+ * request/response interaction (the last is the failing call, since execution
+ * stops there).
+ *
+ * <p>The Extent report is flushed once per suite by {@code ExtentFlushListener},
+ * not here — under parallel execution a per-scenario flush would race across
+ * threads. This hook only releases the thread-local test node.
  */
 public class ApiHooks {
 
@@ -87,7 +91,7 @@ public class ApiHooks {
 
         log.info("Scenario END:   {} -> {}", scenario.getName(), scenario.getStatus());
 
-        ExtentManager.flush();
+        // Report is flushed once per suite by ExtentFlushListener (parallel-safe).
         ExtentTestManager.remove();
     }
 
