@@ -72,6 +72,10 @@ public interface AppConfig extends Config {
     @DefaultValue("10000")
     long uiExplicitTimeoutMs();
 
+    @Key("ui.timeout.pageload.ms")
+    @DefaultValue("30000")
+    long uiPageLoadTimeoutMs();
+
     // -------------------------------------------------------------------------
     // Cross-cutting
     // -------------------------------------------------------------------------

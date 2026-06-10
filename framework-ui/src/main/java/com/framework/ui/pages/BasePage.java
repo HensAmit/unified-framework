@@ -1,5 +1,6 @@
 package com.framework.ui.pages;
 
+import com.framework.common.config.AppConfig;
 import com.framework.common.config.ConfigManager;
 import org.openqa.selenium.By;
 import org.openqa.selenium.TimeoutException;
@@ -9,45 +10,60 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Base class for all page objects.
  *
- * <p>Provides the common interaction primitives — click, type, read text,
- * visibility checks — each guarded by an <strong>explicit wait</strong>. We use
- * classic {@link By} locators plus {@link WebDriverWait} rather than Selenium's
- * PageFactory/{@code @FindBy}: explicit waits make the synchronization visible
- * and controllable, and avoid the stale-proxy surprises PageFactory can cause.
+ * <p>Provides interaction primitives — click, type, read text, presence checks —
+ * each guarded by an <strong>explicit wait</strong>. Uses classic {@link By}
+ * locators plus {@link WebDriverWait} (not PageFactory/{@code @FindBy}).
  *
- * <p>Concrete pages (e.g. {@code LoginPage}) extend this, declare their locators
- * as {@code By} constants, and expose intention-revealing methods built on these
- * primitives.
- *
- * <p>The driver is passed in by the caller (a step), which obtains it from
- * {@code DriverManager}. Pages therefore depend only on a {@link WebDriver},
- * keeping them decoupled from the DI container and the scenario context.
+ * <p><strong>Condition-specific timeouts.</strong> Two pre-built waits cover the
+ * common cases: {@code wait} (element-level, the standard explicit timeout) and
+ * {@code pageWait} (longer, for page transitions like URL changes). A
+ * per-call overload lets a page supply a custom timeout when a specific
+ * condition needs more or less patience than the defaults.
  */
 public abstract class BasePage {
 
     protected final WebDriver driver;
-    protected final WebDriverWait wait;
+    protected final WebDriverWait wait;       // standard element-level waits
+    protected final WebDriverWait pageWait;   // longer waits for page transitions
 
     protected BasePage(WebDriver driver) {
+        AppConfig config = ConfigManager.get();
         this.driver = driver;
-        long timeoutMs = ConfigManager.get().uiExplicitTimeoutMs();
-        this.wait = new WebDriverWait(driver, Duration.ofMillis(timeoutMs));
+        this.wait = new WebDriverWait(driver, Duration.ofMillis(config.uiExplicitTimeoutMs()));
+        this.pageWait = new WebDriverWait(driver, Duration.ofMillis(config.uiPageLoadTimeoutMs()));
     }
 
     // -------------------------------------------------------------------------
-    // Wait helpers
+    // Wait helpers (condition-specific)
     // -------------------------------------------------------------------------
 
     protected WebElement waitForVisible(By locator) {
         return wait.until(ExpectedConditions.visibilityOfElementLocated(locator));
     }
 
+    /** Visibility wait with a caller-supplied timeout, for conditions that need a non-default window. */
+    protected WebElement waitForVisible(By locator, long timeoutMs) {
+        return new WebDriverWait(driver, Duration.ofMillis(timeoutMs))
+                .until(ExpectedConditions.visibilityOfElementLocated(locator));
+    }
+
     protected WebElement waitForClickable(By locator) {
         return wait.until(ExpectedConditions.elementToBeClickable(locator));
+    }
+
+    /** Waits (page-transition timeout) for the current URL to contain the fragment. */
+    protected void waitForUrlContains(String fragment) {
+        pageWait.until(ExpectedConditions.urlContains(fragment));
+    }
+
+    /** Waits for an element to disappear (e.g. a spinner, or a removed cart badge). */
+    protected boolean waitForInvisible(By locator) {
+        return wait.until(ExpectedConditions.invisibilityOfElementLocated(locator));
     }
 
     // -------------------------------------------------------------------------
@@ -68,17 +84,18 @@ public abstract class BasePage {
         return waitForVisible(locator).getText();
     }
 
-    /**
-     * Returns true if the element becomes visible within the explicit-wait
-     * window, false if it times out. Used for presence assertions without
-     * throwing on absence.
-     */
+    /** True if visible within the explicit-wait window, false on timeout. */
     protected boolean isDisplayed(By locator) {
         try {
             return waitForVisible(locator).isDisplayed();
         } catch (TimeoutException e) {
             return false;
         }
+    }
+
+    /** Raw element lookup without waiting — for counts/presence checks that tolerate absence. */
+    protected List<WebElement> findAll(By locator) {
+        return driver.findElements(locator);
     }
 
     // -------------------------------------------------------------------------
