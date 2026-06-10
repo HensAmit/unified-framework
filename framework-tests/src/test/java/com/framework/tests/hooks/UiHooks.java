@@ -25,9 +25,12 @@ import org.openqa.selenium.WebDriver;
  * {@link DriverFactory}, storing it in {@link DriverManager} for the thread.
  *
  * <p>{@code @After}: on failure, attach the stack trace and a screenshot
- * (embedded as base64 in the report) — captured BEFORE quitting the browser.
- * The driver is always quit afterwards to avoid leaking browser processes;
- * "skip cleanup on failure" applies to test data, not the browser session.
+ * (embedded as base64) — captured BEFORE quitting the browser. The driver is
+ * always quit afterwards to avoid leaking browser processes.
+ *
+ * <p>The Extent report is flushed once per suite by {@code ExtentFlushListener},
+ * not here — under parallel execution a per-scenario flush would race across
+ * threads. This hook only releases the thread-local test node and the browser.
  */
 public class UiHooks {
 
@@ -69,8 +72,8 @@ public class UiHooks {
 
         log.info("Scenario END:   {} -> {}", scenario.getName(), scenario.getStatus());
 
+        // Report is flushed once per suite by ExtentFlushListener (parallel-safe).
         DriverManager.quitDriver();
-        ExtentManager.flush();
         ExtentTestManager.remove();
     }
 
