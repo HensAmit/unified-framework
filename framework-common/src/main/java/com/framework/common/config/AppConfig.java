@@ -76,6 +76,14 @@ public interface AppConfig extends Config {
     @DefaultValue("30000")
     long uiPageLoadTimeoutMs();
 
+    @Key("ui.grid.enabled")
+    @DefaultValue("false")
+    boolean uiGridEnabled();
+
+    @Key("ui.grid.url")
+    @DefaultValue("http://localhost:4444/wd/hub")
+    String uiGridUrl();
+
     // -------------------------------------------------------------------------
     // Cross-cutting
     // -------------------------------------------------------------------------

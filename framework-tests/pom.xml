@@ -54,7 +54,6 @@
                     </suiteXmlFiles>
                     <systemPropertyVariables>
                         <env>${env}</env>
-                        <browser>${browser}</browser>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
