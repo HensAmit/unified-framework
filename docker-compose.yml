@@ -1,0 +1,63 @@
+# =============================================================================
+# Full containerized run: Selenium Grid + the test runner, on one network.
+#
+#   docker compose up --build          # build the test image, start everything
+#   docker compose up --build tests    # (after a code change) rebuild + run tests
+#   docker compose down                # stop and remove everything
+#
+# The `tests` service waits for the Grid, runs the UI suite against it, and
+# writes reports to ./framework-tests/target on the host (via the volume mount).
+# The Grid console is at http://localhost:4444 while it's up.
+#
+# Chromium + Firefox only (no Edge) — Edge has no ARM64 image, so this runs on
+# Apple Silicon and x86 alike.
+# =============================================================================
+
+services:
+  selenium-hub:
+    image: selenium/hub:4.32
+    container_name: selenium-hub
+    ports:
+      - "4442:4442"   # event bus publish
+      - "4443:4443"   # event bus subscribe
+      - "4444:4444"   # hub / RemoteWebDriver endpoint + console
+
+  chrome:
+    image: selenium/node-chromium:4.32
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=4
+    shm_size: 2gb
+
+  firefox:
+    image: selenium/node-firefox:4.32
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=4
+    shm_size: 2gb
+
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - selenium-hub
+      - chrome
+      - firefox
+    # The default run (UI suite vs Grid, headless) comes from the Dockerfile CMD.
+    # Override here to change tags or browser, e.g.:
+    # command: ["-Dcucumber.filter.tags=@ui", "-Dui.grid.enabled=true", "-Dui.grid.url=http://selenium-hub:4444/wd/hub", "-Dui.browser=firefox", "-Dui.headless=true"]
+    #
+    # To run API tests, pass credentials as -D args here (and switch the tag):
+    # command: ["-Dcucumber.filter.tags=@api", "-Dapi.auth.client.id=...", "-Dapi.auth.client.secret=..."]
+    volumes:
+      # Surface the Extent report and Surefire output to the host.
+      - ./framework-tests/target:/workspace/framework-tests/target
