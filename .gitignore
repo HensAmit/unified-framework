@@ -1,33 +1,30 @@
-# Maven
+# ---- Build output ----
 target/
-*.class
+**/target/
 
-# IntelliJ
+# ---- IDE ----
 .idea/
 *.iml
 *.iws
 *.ipr
-
-# Eclipse
+.vscode/
 .project
 .classpath
 .settings/
-bin/
 
-# VS Code
-.vscode/
-
-# OS
+# ---- OS ----
 .DS_Store
 Thumbs.db
 
-# Logs
+# ---- Logs ----
 *.log
 logs/
 
-# Reports
-test-output/
-extent-report.html
-
-# Local config overrides
+# ---- Secrets / local overrides: NEVER commit credentials ----
+.env
+*.env
 local.properties
+**/secrets.properties
+
+# ---- Misc ----
+*.class
