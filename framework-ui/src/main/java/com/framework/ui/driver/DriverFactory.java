@@ -18,6 +18,8 @@ import org.openqa.selenium.remote.RemoteWebDriver;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Builds a configured {@link WebDriver} from {@link AppConfig}.
@@ -88,6 +90,15 @@ public final class DriverFactory {
             options.addArguments("--headless=new");
         }
         options.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1920,1080");
+
+        // Suppress Chrome's "password found in a data breach" / password-manager popups.
+        options.addArguments("--disable-features=PasswordLeakDetection,AutofillServerCommunication");
+        Map<String, Object> prefs = new HashMap<>();
+        prefs.put("credentials_enable_service", false);
+        prefs.put("profile.password_manager_enabled", false);
+        prefs.put("profile.password_manager_leak_detection", false);
+        options.setExperimentalOption("prefs", prefs);
+
         return options;
     }
 
