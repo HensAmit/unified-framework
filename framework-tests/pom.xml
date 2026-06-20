@@ -23,6 +23,12 @@
             <groupId>com.framework</groupId>
             <artifactId>framework-ui</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.framework</groupId>
+            <artifactId>framework-db</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
 
         <dependency>
             <groupId>io.cucumber</groupId>
@@ -51,6 +57,7 @@
                     <suiteXmlFiles>
                         <suiteXmlFile>src/test/resources/testng-api.xml</suiteXmlFile>
                         <suiteXmlFile>src/test/resources/testng-ui.xml</suiteXmlFile>
+                        <suiteXmlFile>src/test/resources/testng-db.xml</suiteXmlFile>
                     </suiteXmlFiles>
                     <systemPropertyVariables>
                         <env>${env}</env>

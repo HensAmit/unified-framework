@@ -95,4 +95,16 @@ public interface AppConfig extends Config {
     @Key("retry.count")
     @DefaultValue("2")
     int retryCount();
+
+    @Key("db.url")
+    @DefaultValue("jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL")
+    String dbUrl();
+
+    @Key("db.username")
+    @DefaultValue("sa")
+    String dbUsername();
+
+    @Key("db.password")
+    @DefaultValue("")
+    String dbPassword();
 }
