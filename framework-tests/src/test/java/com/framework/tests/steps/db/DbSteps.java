@@ -17,6 +17,11 @@ import java.util.Map;
  * <p>Reuses the same {@link PlaceholderResolver} the rest of the framework uses
  * (it reads {@code scenarioVars} internally), so a value saved earlier — e.g. an
  * id from an API call — can be referenced inside a SQL string here.
+ *
+ * <p>Column matching is case-insensitive on purpose: H2 folds identifiers to
+ * UPPERCASE, MySQL preserves them as written. Matching ignoring case keeps the
+ * same feature-file assertions passing on either engine — so switching H2 ⇄
+ * Testcontainers MySQL needs no change here.
  */
 public class DbSteps {
 
@@ -55,10 +60,14 @@ public class DbSteps {
         }
     }
 
+    /**
+     * Case-insensitive column lookup — engine-agnostic across H2 (UPPERCASE labels)
+     * and MySQL (as-written labels).
+     */
     private static Object getIgnoreCase(Map<String, Object> row, String column) {
-        for (Map.Entry<String, Object> e : row.entrySet()) {
-            if (e.getKey().equalsIgnoreCase(column)) {
-                return e.getValue();
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(column)) {
+                return entry.getValue();
             }
         }
         return null;
