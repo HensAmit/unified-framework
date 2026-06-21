@@ -9,6 +9,7 @@ import com.framework.common.context.TestContext.HttpInteraction;
 import com.framework.common.report.ExtentManager;
 import com.framework.common.report.ExtentTestManager;
 import com.framework.common.utils.LogUtils;
+import com.framework.db.service.DbService;
 import io.cucumber.java.After;
 import io.cucumber.java.Before;
 import io.cucumber.java.Scenario;
@@ -42,10 +43,12 @@ public class ApiHooks {
 
     private final TestContext ctx;
     private final AuthManager authManager;
+    private final DbService db;
 
-    public ApiHooks(TestContext ctx, AuthManager authManager) {
+    public ApiHooks(TestContext ctx, AuthManager authManager, DbService db) {
         this.ctx = ctx;
         this.authManager = authManager;
+        this.db = db;
     }
 
     @Before(value = "@api", order = 0)
@@ -74,6 +77,7 @@ public class ApiHooks {
 
         // Resolve the token up-front so misconfiguration fails fast.
         ctx.setAuthToken(authManager.getToken());
+        db.connect();
     }
 
     @After("@api")
@@ -91,6 +95,7 @@ public class ApiHooks {
 
         log.info("Scenario END:   {} -> {}", scenario.getName(), scenario.getStatus());
 
+        db.close();
         // Report is flushed once per suite by ExtentFlushListener (parallel-safe).
         ExtentTestManager.remove();
     }

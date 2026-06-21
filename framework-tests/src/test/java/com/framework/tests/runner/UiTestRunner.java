@@ -21,7 +21,7 @@ import org.testng.annotations.DataProvider;
  */
 @CucumberOptions(
         features = "src/test/resources/features/ui",
-        glue = {"com.framework.tests.steps.ui", "com.framework.tests.hooks"},
+        glue = {"com.framework.tests.steps.ui", "com.framework.tests.steps.db", "com.framework.tests.hooks"},
         plugin = {"pretty"}
 )
 public class UiTestRunner extends AbstractTestNGCucumberTests {

@@ -24,20 +24,14 @@ import java.util.Map;
 /**
  * Thin JDBC wrapper — the database counterpart to {@code ApiService}.
  *
- * <p>Test code never touches raw JDBC; it goes through this service, which
- * exposes queries as {@code List<Map<String,Object>>} (one map per row,
- * column-name → value) — the JDBC equivalent of treating JSON as data rather
- * than mapping every table to a POJO.
- *
- * <p>Uses only {@code java.sql} plus the JDBC URL from config — no H2-specific
- * imports — so moving from H2 to a real MySQL (via Testcontainers) later changes
- * only the URL, not this class.
+ * <p>Test code never touches raw JDBC; it goes through this service, which exposes
+ * queries as {@code List<Map<String,Object>>}. Uses only {@code java.sql} plus the
+ * JDBC URL from config, so the engine is a configuration concern.
  *
  * <p>One {@link Connection} per instance (per scenario via PicoContainer), so it's
- * thread-confined and safe under parallel execution. The schema/data are seeded
- * <strong>once per JVM</strong> using double-checked locking on a static flag —
- * the shared in-memory database is populated by the first scenario to connect,
- * and concurrent scenarios wait for that to finish before querying.
+ * thread-confined and parallel-safe. {@link #connect()} is idempotent — calling it
+ * more than once per scenario (e.g. from multiple hooks) opens at most one
+ * connection. Schema/data are seeded once per JVM via double-checked locking.
  */
 public class DbService {
 
@@ -46,14 +40,19 @@ public class DbService {
     private static final String SCHEMA_SCRIPT = "db/schema.sql";
     private static final String DATA_SCRIPT = "db/data.sql";
 
-    // Seed once per JVM, regardless of how many scenarios connect (in parallel).
     private static volatile boolean seeded = false;
     private static final Object SEED_LOCK = new Object();
 
     private Connection connection;
 
-    /** Opens a connection from config and ensures the schema/data are seeded. */
+    /**
+     * Opens a connection from config (if not already open) and ensures the
+     * schema/data are seeded. Idempotent: a second call while connected no-ops.
+     */
     public void connect() {
+        if (connection != null) {
+            return;   // already connected for this scenario
+        }
         AppConfig config = ConfigManager.get();
         try {
             connection = DriverManager.getConnection(
@@ -65,10 +64,6 @@ public class DbService {
         ensureSeeded();
     }
 
-    /**
-     * Runs a SELECT and returns the rows as column-name → value maps.
-     * {@link LinkedHashMap} preserves column order for readable output.
-     */
     public List<Map<String, Object>> query(String sql) {
         List<Map<String, Object>> rows = new ArrayList<>();
         try (Statement statement = connection.createStatement();
@@ -89,20 +84,20 @@ public class DbService {
         return rows;
     }
 
-    /** Closes the connection. Best-effort — a close error must not mask a test failure. */
+    /** Closes the connection (best-effort) and clears it so a later connect() can reopen. */
     public void close() {
         if (connection != null) {
             try {
                 connection.close();
             } catch (SQLException e) {
                 log.warn("Error closing DB connection: {}", e.getMessage());
+            } finally {
+                connection = null;
             }
         }
     }
 
-    // -------------------------------------------------------------------------
-    // One-time seeding (double-checked locking)
-    // -------------------------------------------------------------------------
+    // ---- one-time seeding (double-checked locking) ----
 
     private void ensureSeeded() {
         if (seeded) {
@@ -144,7 +139,7 @@ public class DbService {
                 while ((line = reader.readLine()) != null) {
                     String trimmed = line.trim();
                     if (trimmed.isEmpty() || trimmed.startsWith("--")) {
-                        continue;   // skip blank lines and SQL comments
+                        continue;
                     }
                     sb.append(line).append('\n');
                 }

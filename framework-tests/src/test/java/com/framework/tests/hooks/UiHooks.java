@@ -7,6 +7,7 @@ import com.framework.common.context.TestContext;
 import com.framework.common.report.ExtentManager;
 import com.framework.common.report.ExtentTestManager;
 import com.framework.common.utils.LogUtils;
+import com.framework.db.service.DbService;
 import com.framework.ui.driver.DriverFactory;
 import com.framework.ui.driver.DriverManager;
 import io.cucumber.java.After;
@@ -37,9 +38,11 @@ public class UiHooks {
     private static final Logger log = LogUtils.getLogger(UiHooks.class);
 
     private final TestContext ctx;
+    private final DbService db;
 
-    public UiHooks(TestContext ctx) {
+    public UiHooks(TestContext ctx, DbService db) {
         this.ctx = ctx;
+        this.db = db;
     }
 
     @Before(value = "@ui", order = 0)
@@ -55,6 +58,7 @@ public class UiHooks {
 
         WebDriver driver = DriverFactory.createDriver();
         DriverManager.setDriver(driver);
+        db.connect();
     }
 
     @After("@ui")
@@ -75,6 +79,7 @@ public class UiHooks {
         // Report is flushed once per suite by ExtentFlushListener (parallel-safe).
         DriverManager.quitDriver();
         ExtentTestManager.remove();
+        db.close();
     }
 
     private void logStackTrace(ExtentTest test) {

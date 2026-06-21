@@ -57,7 +57,6 @@
                     <suiteXmlFiles>
                         <suiteXmlFile>src/test/resources/testng-api.xml</suiteXmlFile>
                         <suiteXmlFile>src/test/resources/testng-ui.xml</suiteXmlFile>
-                        <suiteXmlFile>src/test/resources/testng-db.xml</suiteXmlFile>
                     </suiteXmlFiles>
                     <systemPropertyVariables>
                         <env>${env}</env>

@@ -23,6 +23,12 @@ Feature: Spotify playlist write operations
     Then I assert the response:
       | type   | path | expected |
       | status |      | 200      |
+    Then the database query "SELECT name, owner, track_count FROM playlists WHERE id = 1" should return:
+      | column      | expected     |
+      | name        | Coding Focus |
+      | owner       | amit         |
+      | track_count | 25           |
+    Then the database query "SELECT * FROM playlists" should return 2 rows
 
   @P2
   Scenario: Create a playlist and add a track

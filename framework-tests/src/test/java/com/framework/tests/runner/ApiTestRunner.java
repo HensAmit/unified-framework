@@ -25,7 +25,7 @@ import org.testng.annotations.DataProvider;
  */
 @CucumberOptions(
         features = "src/test/resources/features/api",
-        glue = { "com.framework.tests.steps.api", "com.framework.tests.hooks" },
+        glue = { "com.framework.tests.steps.api", "com.framework.tests.steps.db", "com.framework.tests.hooks" },
         plugin = {
                 "pretty",
                 "html:target/reports/cucumber.html",
