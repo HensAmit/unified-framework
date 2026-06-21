@@ -1,4 +1,4 @@
-package com.framework.db.service;
+package com.framework.common.service;
 
 import com.framework.common.config.AppConfig;
 import com.framework.common.config.ConfigManager;

@@ -7,7 +7,7 @@ import com.framework.common.context.TestContext;
 import com.framework.common.report.ExtentManager;
 import com.framework.common.report.ExtentTestManager;
 import com.framework.common.utils.LogUtils;
-import com.framework.db.service.DbService;
+import com.framework.common.service.DbService;
 import com.framework.ui.driver.DriverFactory;
 import com.framework.ui.driver.DriverManager;
 import io.cucumber.java.After;

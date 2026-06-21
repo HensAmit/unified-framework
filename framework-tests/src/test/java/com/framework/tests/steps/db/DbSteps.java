@@ -2,7 +2,7 @@ package com.framework.tests.steps.db;
 
 import com.framework.common.service.AssertionService;
 import com.framework.common.service.PlaceholderResolver;
-import com.framework.db.service.DbService;
+import com.framework.common.service.DbService;
 import io.cucumber.datatable.DataTable;
 import io.cucumber.java.en.Then;
 

@@ -9,7 +9,7 @@ import com.framework.common.context.TestContext.HttpInteraction;
 import com.framework.common.report.ExtentManager;
 import com.framework.common.report.ExtentTestManager;
 import com.framework.common.utils.LogUtils;
-import com.framework.db.service.DbService;
+import com.framework.common.service.DbService;
 import io.cucumber.java.After;
 import io.cucumber.java.Before;
 import io.cucumber.java.Scenario;

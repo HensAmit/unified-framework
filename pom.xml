@@ -17,7 +17,6 @@
         <module>framework-api</module>
         <module>framework-ui</module>
         <module>framework-tests</module>
-        <module>framework-db</module>
     </modules>
 
     <properties>
