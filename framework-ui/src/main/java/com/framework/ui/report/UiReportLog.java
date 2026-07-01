@@ -13,9 +13,18 @@ import org.openqa.selenium.WebDriver;
 /**
  * UI-specific report logging that attaches a screenshot to the current
  * scenario's Extent node. Reads the per-thread WebDriver (DriverManager) and
- * ExtentTest (ExtentTestManager), so it is parallel-safe. Captures the screen
- * as base64 and embeds it inline, keeping the report a single self-contained
- * HTML file. No-ops safely if no driver or no Extent node is present.
+ * ExtentTest (ExtentTestManager), so it is parallel-safe: each scenario thread
+ * logs to its own node.
+ *
+ * <p>The screenshot is embedded as an inline base64 image at a readable width
+ * (shown by default, no click required) rather than via MediaEntityBuilder,
+ * which renders a click-to-open link. The image is capped at 900px wide and
+ * scales down on narrow reports. It stays embedded in the HTML, so the report
+ * remains a single self-contained file.
+ *
+ * <p>No-ops safely if no Extent node is set (falls back to Log4j) and tolerates
+ * a missing driver or capture failure (logs the text without an image), so a
+ * screenshot problem never breaks the test flow.
  */
 public final class UiReportLog {
 
@@ -56,9 +65,11 @@ public final class UiReportLog {
 
         String base64 = captureBase64();
         if (base64 != null) {
-            test.log(status, message,
-                    com.aventstack.extentreports.MediaEntityBuilder
-                            .createScreenCaptureFromBase64String(base64).build());
+            String dataUri = "data:image/png;base64," + base64;
+            String html = message + "<br>"
+                    + "<img src='" + dataUri + "' "
+                    + "style='width:100%; max-width:900px; border:1px solid #ccc; border-radius:4px;'/>";
+            test.log(status, html);
         } else {
             // Driver unavailable or capture failed — still log the text.
             test.log(status, message);

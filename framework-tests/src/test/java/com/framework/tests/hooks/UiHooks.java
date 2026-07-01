@@ -1,7 +1,6 @@
 package com.framework.tests.hooks;
 
 import com.aventstack.extentreports.ExtentTest;
-import com.aventstack.extentreports.MediaEntityBuilder;
 import com.aventstack.extentreports.Status;
 import com.framework.common.context.TestContext;
 import com.framework.common.report.ExtentManager;
@@ -26,8 +25,9 @@ import org.openqa.selenium.WebDriver;
  * {@link DriverFactory}, storing it in {@link DriverManager} for the thread.
  *
  * <p>{@code @After}: on failure, attach the stack trace and a screenshot
- * (embedded as base64) — captured BEFORE quitting the browser. The driver is
- * always quit afterwards to avoid leaking browser processes.
+ * (embedded as an inline base64 thumbnail) — captured BEFORE quitting the
+ * browser. The driver is always quit afterwards to avoid leaking browser
+ * processes.
  *
  * <p>The Extent report is flushed once per suite by {@code ExtentFlushListener},
  * not here — under parallel execution a per-scenario flush would race across
@@ -91,16 +91,23 @@ public class UiHooks {
     }
 
     /**
-     * Captures the current browser screenshot as base64 and embeds it in the
-     * Extent report. Best-effort: a screenshot failure must not mask the real
-     * test failure, so problems here are logged and swallowed.
+     * Captures the current browser screenshot and embeds it as an inline base64
+     * image at a readable width — shown by default (no click required), unlike
+     * MediaEntityBuilder which renders a click-to-open link. The image is
+     * capped at 900px wide and scales down on narrow reports.
+     *
+     * <p>Best-effort: a screenshot failure must not mask the real test failure,
+     * so problems here are logged and swallowed.
      */
     private void attachScreenshot(ExtentTest test) {
         try {
             WebDriver driver = DriverManager.getDriver();
             String base64 = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BASE64);
-            test.fail("Screenshot at failure:",
-                    MediaEntityBuilder.createScreenCaptureFromBase64String(base64).build());
+            String dataUri = "data:image/png;base64," + base64;
+            String html = "Screenshot at failure:<br>"
+                    + "<img src='" + dataUri + "' "
+                    + "style='width:100%; max-width:900px; border:1px solid #ccc; border-radius:4px;'/>";
+            test.log(Status.FAIL, html);
         } catch (Exception e) {
             log.warn("Could not capture screenshot: {}", e.getMessage());
         }
