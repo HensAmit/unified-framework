@@ -1,6 +1,7 @@
 package com.framework.api.service;
 
 import com.framework.common.context.TestContext;
+import com.framework.common.report.ReportLog;
 import com.framework.common.utils.JsonUtils;
 import com.framework.common.utils.LogUtils;
 import com.jayway.jsonpath.DocumentContext;

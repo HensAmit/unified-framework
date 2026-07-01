@@ -1,9 +1,11 @@
 package com.framework.api.service;
 
+import com.aventstack.extentreports.ExtentTest;
 import com.framework.api.auth.AuthManager;
 import com.framework.common.config.AppConfig;
 import com.framework.common.config.ConfigManager;
 import com.framework.common.context.TestContext;
+import com.framework.common.report.ExtentTestManager;
 import com.framework.common.utils.JsonUtils;
 import com.framework.common.utils.LogUtils;
 import io.restassured.RestAssured;
@@ -27,9 +29,16 @@ import org.apache.logging.log4j.Logger;
  *   <li>attaches a body (for write verbs) from the passed JSON string,</li>
  *   <li>executes via RestAssured,</li>
  *   <li>stores the {@link Response} and a parsed response DocumentContext into
- *       the context, and appends the captured request/response to the context's
- *       interaction list via a filter.</li>
+ *       the context, appends the captured request/response to the context's
+ *       interaction list, AND logs the request/response inline to the current
+ *       Extent node via a filter.</li>
  * </ol>
+ *
+ * <p>Inline reporting: the filter writes each request and response to the
+ * scenario's Extent node the instant the call completes, so the report reads
+ * top-to-bottom in call order alongside the steps that made the calls. This is
+ * done for every call (pass or fail); the context list is still populated so
+ * failure diagnostics and any end-of-scenario reporting keep working.
  */
 public class ApiService {
 
@@ -124,9 +133,10 @@ public class ApiService {
     }
 
     /**
-     * Captures each request/response pair and APPENDS it to the context's
-     * interaction list, so a multi-call scenario keeps every interaction (not
-     * just the last). The failure report can then show all of them.
+     * Captures each request/response pair, appends it to the context's
+     * interaction list (kept for failure diagnostics), AND logs it inline to
+     * the current scenario's Extent node so the report shows the request and
+     * response bodies next to the step that made the call.
      */
     private static final class ContextCapturingFilter implements Filter {
         private final TestContext ctx;
@@ -151,8 +161,37 @@ public class ApiService {
                     + "Headers : " + response.getHeaders() + "\n"
                     + "Body    : " + response.getBody().asPrettyString();
 
+            // Keep the context list populated for failure reporting.
             ctx.addHttpInteraction(reqLog, respLog);
+
+            // Inline reporting: write request + response to the Extent node now.
+            logInline(requestSpec.getMethod() + " " + requestSpec.getURI(), reqLog, respLog);
+
             return response;
+        }
+
+        /**
+         * Writes the request and response as collapsible blocks on the current
+         * Extent node. No-ops safely if no node is set (e.g. a call made outside
+         * a scenario, or in a unit test), so it never breaks the HTTP flow.
+         */
+        private void logInline(String title, String reqLog, String respLog) {
+            ExtentTest test = ExtentTestManager.get();
+            if (test == null) {
+                return;
+            }
+            test.info("<b>" + escape(title) + "</b>"
+                    + "<details><summary>Request</summary><pre>"
+                    + escape(reqLog) + "</pre></details>"
+                    + "<details><summary>Response</summary><pre>"
+                    + escape(respLog) + "</pre></details>");
+        }
+
+        private static String escape(String s) {
+            if (s == null) {
+                return "";
+            }
+            return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
         }
     }
 }

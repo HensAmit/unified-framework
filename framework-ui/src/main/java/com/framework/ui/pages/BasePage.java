@@ -2,6 +2,7 @@ package com.framework.ui.pages;
 
 import com.framework.common.config.AppConfig;
 import com.framework.common.config.ConfigManager;
+import com.framework.ui.report.UiReportLog;
 import org.openqa.selenium.By;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
@@ -71,13 +72,16 @@ public abstract class BasePage {
     // -------------------------------------------------------------------------
 
     protected void click(By locator) {
+        UiReportLog.infoWithScreenshot("Before clicking: " + locator);
         waitForClickable(locator).click();
+        UiReportLog.infoWithScreenshot("After clicking: " + locator);
     }
 
     protected void type(By locator, String text) {
         WebElement element = waitForVisible(locator);
         element.clear();
         element.sendKeys(text);
+        UiReportLog.info("Entered text " + text + " in " + locator);
     }
 
     protected String getText(By locator) {

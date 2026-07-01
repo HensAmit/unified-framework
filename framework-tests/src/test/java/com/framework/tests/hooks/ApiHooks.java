@@ -5,7 +5,6 @@ import com.aventstack.extentreports.Status;
 import com.framework.api.auth.AuthManager;
 import com.framework.common.config.ConfigManager;
 import com.framework.common.context.TestContext;
-import com.framework.common.context.TestContext.HttpInteraction;
 import com.framework.common.report.ExtentManager;
 import com.framework.common.report.ExtentTestManager;
 import com.framework.common.utils.LogUtils;
@@ -14,8 +13,6 @@ import io.cucumber.java.After;
 import io.cucumber.java.Before;
 import io.cucumber.java.Scenario;
 import org.apache.logging.log4j.Logger;
-
-import java.util.List;
 
 /**
  * Cucumber hooks for API scenarios. Scoped to {@code @api} so they fire only for
@@ -27,9 +24,11 @@ import java.util.List;
  *
  * <p>Assertions are hard — a failing assertion throws during the step, Cucumber
  * marks the scenario failed before any {@code @After} runs. The {@code @After}
- * reports the outcome: on failure it attaches the captured stack trace and every
- * request/response interaction (the last is the failing call, since execution
- * stops there).
+ * reports the outcome: on failure it attaches the captured stack trace.
+ *
+ * <p>Request/response bodies are logged inline by {@code ApiService} as each
+ * call completes (they appear next to the step that made the call), so this hook
+ * no longer dumps them at scenario end — doing so would duplicate them.
  *
  * <p>The Extent report is flushed once per suite by {@code ExtentFlushListener},
  * not here — under parallel execution a per-scenario flush would race across
@@ -88,7 +87,6 @@ public class ApiHooks {
             test.log(Status.FAIL, "Scenario failed: " + scenario.getName()
                     + "<br>Location: " + scenario.getUri() + ":" + scenario.getLine());
             logStackTrace(test);
-            attachAllInteractions(test);
         } else {
             test.log(Status.PASS, "Scenario passed: " + scenario.getName());
         }
@@ -111,25 +109,6 @@ public class ApiHooks {
             return;
         }
         test.log(Status.FAIL, "<b>Stack trace:</b><pre>" + escape(trace) + "</pre>");
-    }
-
-    /**
-     * Attaches every captured request/response pair, labelled by call order.
-     * Under hard-assert semantics the last pair is the failing call.
-     */
-    private void attachAllInteractions(ExtentTest test) {
-        List<HttpInteraction> interactions = ctx.getHttpInteractions();
-        if (interactions.isEmpty()) {
-            return;
-        }
-        int i = 1;
-        for (HttpInteraction interaction : interactions) {
-            test.info("<details><summary>Request #" + i + "</summary><pre>"
-                    + escape(interaction.requestLog()) + "</pre></details>");
-            test.info("<details><summary>Response #" + i + "</summary><pre>"
-                    + escape(interaction.responseLog()) + "</pre></details>");
-            i++;
-        }
     }
 
     private static String escape(String s) {

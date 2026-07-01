@@ -4,6 +4,7 @@ import com.framework.common.context.TestContext;
 import com.framework.common.service.AssertionService;
 import com.framework.common.utils.LogUtils;
 import com.framework.ui.pages.PageManager;
+import com.framework.ui.report.UiReportLog;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
@@ -34,7 +35,7 @@ public class LoginSteps {
     @Given("I open the SauceDemo login page")
     public void iOpenTheLoginPage() {
         pages.login().open();
-        log.info("Opened login page: {}", pages.login().getCurrentUrl());
+        UiReportLog.info("Opened login page: " + pages.login().getCurrentUrl());
     }
 
     @Then("the login form should be displayed")

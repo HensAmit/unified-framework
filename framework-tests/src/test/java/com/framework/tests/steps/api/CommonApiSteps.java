@@ -5,6 +5,7 @@ import com.framework.api.service.ApiService;
 import com.framework.api.service.PayloadService;
 import com.framework.api.service.ValueParser;
 import com.framework.common.context.TestContext;
+import com.framework.common.report.ReportLog;
 import com.framework.common.service.AssertionService;
 import com.framework.common.utils.LogUtils;
 import io.cucumber.datatable.DataTable;
@@ -71,12 +72,14 @@ public class CommonApiSteps {
 
     @Given("I load the payload {string}")
     public void iLoadThePayload(String classpathPath) {
+        ReportLog.info("Loading payload template: " + classpathPath);
         payloadService.loadPayload(classpathPath);
     }
 
     @Given("I update the request payload:")
     public void iUpdateTheRequestPayload(DataTable table) {
         payloadService.update(table);
+        ReportLog.pass("Updated the Request payload successfully");
     }
 
     // -------------------------------------------------------------------------
